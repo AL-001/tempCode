@@ -8,9 +8,7 @@ import org.bouncycastle.asn1.pkcs.CertificationRequest;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
-import org.bouncycastle.jce.ECNamedCurveTable;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.DefaultSignatureAlgorithmIdentifierFinder;
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
@@ -21,27 +19,21 @@ import org.bouncycastle.util.io.pem.PemWriter;
 
 import java.io.*;
 import java.security.*;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 
 public class CsrRequest {
     public static void main(String[] args) throws Exception {
-        createCsr();
-        System.out.println("....");
-    }
+        byte[][] keys = createKey();
+        KeyFactory rsa = KeyFactory.getInstance("RSA", BouncyCastleProvider.PROVIDER_NAME);
+        PKCS8EncodedKeySpec pkcs8EncodedKeySpec = new PKCS8EncodedKeySpec(keys[0]);
+        PrivateKey privateKey = rsa.generatePrivate(pkcs8EncodedKeySpec);
+        X509EncodedKeySpec x509EncodedKeySpec = new X509EncodedKeySpec(keys[1]);
+        PublicKey publicKey = rsa.generatePublic(x509EncodedKeySpec);
 
-    public static CertificationRequest createCsr() throws Exception {
-        X500Name x500Name = new X500Name("CN=John Doe, OU=IT Department, O=Example Inc, C=US");
-        // 创建一个用于生成SM2密钥对的生成器
-        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("EC", new BouncyCastleProvider());
-        // 设置使用的SM2曲线参数
-        ECNamedCurveParameterSpec sm2Spec = ECNamedCurveTable.getParameterSpec("sm2p256v1");
-        keyPairGenerator.initialize(sm2Spec, new SecureRandom());
-        KeyPair keyPair = keyPairGenerator.generateKeyPair();
-        PublicKey aPublic = keyPair.getPublic();
-        PrivateKey aPrivate = keyPair.getPrivate();
-        Signature signature = Signature.getInstance("SM3WITHSM2", new BouncyCastleProvider());
-        PKCS10CertificationRequestBuilder pkcs10CertificationRequestBuilder = new PKCS10CertificationRequestBuilder(x500Name, SubjectPublicKeyInfo.getInstance(aPublic.getEncoded()));
-        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        PKCS10CertificationRequest csr = pkcs10CertificationRequestBuilder.build(new ContentSigner() {
+        createCsr(publicKey, new ContentSigner() {
+            final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+            final Signature signature = Signature.getInstance("SHA256withRSA");
             @Override
             public AlgorithmIdentifier getAlgorithmIdentifier() {
                 return new DefaultSignatureAlgorithmIdentifierFinder().find(signature.getAlgorithm());
@@ -55,7 +47,7 @@ public class CsrRequest {
             @Override
             public byte[] getSignature() {
                 try {
-                    signature.initSign(aPrivate);
+                    signature.initSign(privateKey);
                     signature.update(byteArrayOutputStream.toByteArray());
                     return signature.sign();
                 } catch (Exception e) {
@@ -63,14 +55,31 @@ public class CsrRequest {
                 }
             }
         });
-        PemWriter pemWriter = new PemWriter(new PrintWriter(System.out));
-        pemWriter.writeObject(new PemObject("CERTIFICATE REQUEST",csr.getEncoded()));
-        return null;
+    }
+
+    public static void createCsr(PublicKey publicKey, ContentSigner contentSigner) throws Exception {
+        X500Name x500Name = new X500Name("CN=John Doe, OU=IT Department, O=Example Inc, C=US");
+//        // 创建一个用于生成SM2密钥对的生成器
+//        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("EC", new BouncyCastleProvider());
+//        // 设置使用的SM2曲线参数
+//        ECNamedCurveParameterSpec sm2Spec = ECNamedCurveTable.getParameterSpec("sm2p256v1");
+//        keyPairGenerator.initialize(sm2Spec, new SecureRandom());
+//        KeyPair keyPair = keyPairGenerator.generateKeyPair();
+//        PublicKey aPublic = keyPair.getPublic();
+////        PrivateKey aPrivate = keyPair.getPrivate();
+//        Signature signature = Signature.getInstance("SM3WITHSM2", new BouncyCastleProvider());
+        PKCS10CertificationRequestBuilder pkcs10CertificationRequestBuilder = new PKCS10CertificationRequestBuilder(x500Name, SubjectPublicKeyInfo.getInstance(publicKey.getEncoded()));
+
+        PKCS10CertificationRequest csr = pkcs10CertificationRequestBuilder.build(contentSigner);
+        System.out.println("------------------------------------------------------------");
+        PemWriter pemWriter = new PemWriter(new OutputStreamWriter(System.out));
+        pemWriter.writeObject(new PemObject("CERTIFICATE REQUEST", csr.getEncoded()));
+        pemWriter.flush();
     }
 
     public static CertificationRequest readCsr() throws Exception {
         File file = FileUtils.getFileInClassPath("yqzl.csr");
-        CertificationRequest csr = null;
+        CertificationRequest csr;
         try (FileReader reader = new FileReader(file)) {
             PemObject pemObject = new PemReader(reader).readPemObject();
             byte[] content = pemObject.getContent();
@@ -82,5 +91,24 @@ public class CsrRequest {
         }
         System.out.println(csr);
         return csr;
+    }
+
+    private static byte[][] createKey() throws Exception {
+        KeyPairGenerator rsaPair = KeyPairGenerator.getInstance("RSA", BouncyCastleProvider.PROVIDER_NAME);
+        KeyPair keyPair = rsaPair.generateKeyPair();
+        PrivateKey aPrivate = keyPair.getPrivate();
+        PublicKey aPublic = keyPair.getPublic();
+        byte[] pri = aPrivate.getEncoded();
+        byte[] pub = aPublic.getEncoded();
+        System.out.println("------------------------------------------------------------");
+        PemWriter pemWriter = new PemWriter(new OutputStreamWriter(System.out));
+        pemWriter.writeObject(new PemObject("RSA PRIVATE KEY", pri));
+        pemWriter.flush();
+
+        System.out.println("------------------------------------------------------------");
+        pemWriter = new PemWriter(new OutputStreamWriter(System.out));
+        pemWriter.writeObject(new PemObject("RSA PUBLIC KEY", pub));
+        pemWriter.flush();
+        return new byte[][]{pri, pub};
     }
 }

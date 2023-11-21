@@ -56,13 +56,16 @@ public class SimpleProxy {
     }
 
     public static void transferBytes(Socket inSocket, Socket outSocket) {
+        long start = System.currentTimeMillis();
         try (InputStream inputStream = inSocket.getInputStream();
              OutputStream outputStream = outSocket.getOutputStream()) {
             byte[] bytes = new byte[1024];
             int read;
-            while (!inSocket.isClosed() && !outSocket.isClosed()) {
+            //120S超时
+            while (System.currentTimeMillis() < start + 60 * 1000 * 2 && !inSocket.isClosed() && !outSocket.isClosed()) {
                 read = inputStream.read(bytes);
                 if (read != -1) {
+                    start = System.currentTimeMillis();
                     outputStream.write(bytes, 0, read);
                     outputStream.flush();
                     System.out.println("Thread name: " + Thread.currentThread().getName() + " send: " + formatHexDump(bytes, 0, read));
