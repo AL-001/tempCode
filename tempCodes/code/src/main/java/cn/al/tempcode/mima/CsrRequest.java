@@ -9,6 +9,7 @@ import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.jce.provider.X509CertificateObject;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.DefaultSignatureAlgorithmIdentifierFinder;
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
@@ -18,12 +19,18 @@ import org.bouncycastle.util.io.pem.PemReader;
 import org.bouncycastle.util.io.pem.PemWriter;
 
 import java.io.*;
+import java.nio.file.Files;
 import java.security.*;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateFactory;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 
 public class CsrRequest {
+    //C=CN,ST=广东省,L=深圳市,O=深圳农村商业银行股份有限公司,CN=www.4001961200.com
     public static void main(String[] args) throws Exception {
+        Security.addProvider(new BouncyCastleProvider());
+        readCer();
         byte[][] keys = createKey();
         KeyFactory rsa = KeyFactory.getInstance("RSA", BouncyCastleProvider.PROVIDER_NAME);
         PKCS8EncodedKeySpec pkcs8EncodedKeySpec = new PKCS8EncodedKeySpec(keys[0]);
@@ -78,7 +85,7 @@ public class CsrRequest {
     }
 
     public static CertificationRequest readCsr() throws Exception {
-        File file = FileUtils.getFileInClassPath("yqzl.csr");
+        File file = FileUtils.getFileInClassPath("wy.csr");
         CertificationRequest csr;
         try (FileReader reader = new FileReader(file)) {
             PemObject pemObject = new PemReader(reader).readPemObject();
@@ -110,5 +117,11 @@ public class CsrRequest {
         pemWriter.writeObject(new PemObject("RSA PUBLIC KEY", pub));
         pemWriter.flush();
         return new byte[][]{pri, pub};
+    }
+    private static void readCer() throws Exception{
+        File file = FileUtils.getFileInClassPath("wy.cer");
+        CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509", BouncyCastleProvider.PROVIDER_NAME);
+        Certificate certificate = certificateFactory.generateCertificate(Files.newInputStream(file.toPath()));
+        System.out.println(certificate);
     }
 }
