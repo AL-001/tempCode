@@ -12,6 +12,8 @@
     "service_worker": "background.js"
   },
   "host_permissions": [
-    "https://i.lzyumi.top/*"
+    "https://a.lzyumi.top/*",
+    "https://i.lzyumi.top/*",
+    "https://*.lzyumi.top/*"
   ]
 }
